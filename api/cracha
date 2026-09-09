@@ -1,0 +1,120 @@
+const sharp = require('sharp');
+const fetch = require('node-fetch');
+
+async function downloadImage(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Erro ao baixar: ${response.statusText}`);
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function createCircularImage(imageBuffer, size = 232) {
+  return sharp(imageBuffer)
+    .resize(size, size, { fit: 'cover', position: 'center' })
+    .toBuffer()
+    .then(resized => {
+      const circleSvg = `<svg width="${size}" height="${size}">
+        <circle cx="${size/2}" cy="${size/2}" r="${size/2}" fill="white"/>
+      </svg>`;
+      
+      return sharp(resized)
+        .composite([{ 
+          input: Buffer.from(circleSvg),
+          blend: 'dest-in'
+        }])
+        .png()
+        .toBuffer();
+    });
+}
+
+export default async function handler(req, res) {
+  // Permite POST e GET
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    return res.status(405).json({ error: 'Método não permitido' });
+  }
+
+  try {
+    // Suporta tanto POST quanto GET
+    const data = req.method === 'POST' ? req.body : req.query;
+    const { nome, foto_url } = data;
+
+    if (!nome || !foto_url) {
+      return res.status(400).json({ erro: 'Parâmetros obrigatórios: nome e foto_url' });
+    }
+
+    console.log(`[CRACHA] Processando: ${nome}`);
+
+    // 1. URL da imagem base (SUBSTITUA COM SUA URL DO ImgBB)
+    // Vá em https://ibb.co/5hkR5nFJ e copie o link direto (i.ibb.co)
+    const BASE_IMAGE_URL = 'https://i.ibb.co/5hkR5nFJ/sua-imagem.jpg';
+
+    // 2. Baixa a imagem base e a foto do usuário
+    const templateBuffer = await downloadImage(BASE_IMAGE_URL);
+    const fotoBuffer = await downloadImage(foto_url);
+
+    // 3. Processa a foto em círculo
+    const fotoCircular = await createCircularImage(fotoBuffer, 232);
+
+    // 4. Pega dimensões da imagem base
+    const metadata = await sharp(templateBuffer).metadata();
+    const width = metadata.width;
+    const height = metadata.height;
+
+    console.log(`[CRACHA] Template: ${width}x${height}px`);
+
+    // 5. Coordenadas do círculo (ajustadas para o template)
+    const circleX = Math.round(width / 2);     // Centro horizontal
+    const circleY = Math.round(height * 0.35); // 35% do topo
+
+    // Posição do texto (abaixo do círculo)
+    const textY = circleY + 232 + 60;
+
+    // 6. Cria SVG com o nome
+    const textSvg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <style>
+          text {
+            font-family: Arial, sans-serif;
+            font-size: 52px;
+            font-weight: bold;
+            fill: #E8C782;
+            text-anchor: middle;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+          }
+        </style>
+      </defs>
+      <text x="${width / 2}" y="${textY}">
+        ${nome.toUpperCase().trim()}
+      </text>
+    </svg>`;
+
+    console.log(`[CRACHA] Posição: x=${circleX}, y=${circleY}, textY=${textY}`);
+
+    // 7. Compõe: template → foto circular → texto
+    const imagemFinal = await sharp(templateBuffer)
+      .composite([
+        { 
+          input: fotoCircular, 
+          left: circleX - 116,  // 116 = raio (232/2)
+          top: circleY - 116
+        }
+      ])
+      .composite([
+        {
+          input: Buffer.from(textSvg),
+        }
+      ])
+      .jpeg({ quality: 88 })
+      .toBuffer();
+
+    console.log(`[CRACHA] ✅ Imagem gerada: ${imagemFinal.length} bytes`);
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Content-Length', imagemFinal.length);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.status(200).send(imagemFinal);
+
+  } catch (erro) {
+    console.error('[CRACHA] ❌ Erro:', erro.message);
+    res.status(500).json({ erro: erro.message });
+  }
+}
