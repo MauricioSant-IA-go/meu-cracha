@@ -26,14 +26,8 @@ async function createCircularImage(imageBuffer, size = 232) {
     });
 }
 
-export default async function handler(req, res) {
-  // Permite POST e GET
-  if (req.method !== 'POST' && req.method !== 'GET') {
-    return res.status(405).json({ error: 'Método não permitido' });
-  }
-
+module.exports = async (req, res) => {
   try {
-    // Suporta tanto POST quanto GET
     const data = req.method === 'POST' ? req.body : req.query;
     const { nome, foto_url } = data;
 
@@ -43,32 +37,23 @@ export default async function handler(req, res) {
 
     console.log(`[CRACHA] Processando: ${nome}`);
 
-    // 1. URL da imagem base (SUBSTITUA COM SUA URL DO ImgBB)
-    // Vá em https://ibb.co/5hkR5nFJ e copie o link direto (i.ibb.co)
     const BASE_IMAGE_URL = 'https://i.ibb.co/wh7zKws2/template-ingresso.png';
 
-    // 2. Baixa a imagem base e a foto do usuário
     const templateBuffer = await downloadImage(BASE_IMAGE_URL);
     const fotoBuffer = await downloadImage(foto_url);
 
-    // 3. Processa a foto em círculo
     const fotoCircular = await createCircularImage(fotoBuffer, 232);
 
-    // 4. Pega dimensões da imagem base
     const metadata = await sharp(templateBuffer).metadata();
     const width = metadata.width;
     const height = metadata.height;
 
     console.log(`[CRACHA] Template: ${width}x${height}px`);
 
-    // 5. Coordenadas do círculo (ajustadas para o template)
-    const circleX = Math.round(width / 2);     // Centro horizontal
-    const circleY = Math.round(height * 0.35); // 35% do topo
-
-    // Posição do texto (abaixo do círculo)
+    const circleX = Math.round(width / 2);
+    const circleY = Math.round(height * 0.35);
     const textY = circleY + 232 + 60;
 
-    // 6. Cria SVG com o nome
     const textSvg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <style>
@@ -89,12 +74,11 @@ export default async function handler(req, res) {
 
     console.log(`[CRACHA] Posição: x=${circleX}, y=${circleY}, textY=${textY}`);
 
-    // 7. Compõe: template → foto circular → texto
     const imagemFinal = await sharp(templateBuffer)
       .composite([
         { 
           input: fotoCircular, 
-          left: circleX - 116,  // 116 = raio (232/2)
+          left: circleX - 116,
           top: circleY - 116
         }
       ])
@@ -117,4 +101,4 @@ export default async function handler(req, res) {
     console.error('[CRACHA] ❌ Erro:', erro.message);
     res.status(500).json({ erro: erro.message });
   }
-}
+};
