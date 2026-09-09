@@ -21,7 +21,7 @@ async function createCircularImage(imageBuffer, size = 232) {
           input: Buffer.from(circleSvg),
           blend: 'dest-in'
         }])
-        .png()
+        .jpeg({ quality: 88 })
         .toBuffer();
     });
 }
