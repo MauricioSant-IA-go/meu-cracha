@@ -1,0 +1,13 @@
+{
+  "name": "gerador-cracha-manychat",
+  "version": "1.0.0",
+  "main": "api/gerar-cracha.js",
+  "dependencies": {
+    "canvas": "^2.11.2",
+    "node-fetch": "^2.6.11",
+    "sharp": "^0.33.0"
+  },
+  "engines": {
+    "node": "20.x"
+  }
+}
